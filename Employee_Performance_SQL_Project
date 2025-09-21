@@ -1,0 +1,105 @@
+create database Employee_Performance;
+use Employee_Performance;
+select * from extended_employee_performance_and_productivity_data;
+desc extended_employee_performance_and_productivity_data;
+rename table extended_employee_performance_and_productivity_data to employee_data;
+select * from employee_data;
+
+-- Q1: Retrieve the first 10 rows of employee details (EmployeeID, Name, Department, Salary).
+select Employee_ID,Department,Monthly_Salary from employee_data limit 10;
+
+--  Q2: Find all employees in the "Sales" department earning more than 70,000.
+select Employee_ID,Department,Monthly_Salary from employee_data
+	where Department = "Sales" and Monthly_Salary > 70000;
+    
+-- Q3: List employees whose PerformanceScore is missing (NULL).
+select Employee_ID, Department from employee_data
+where Performance_Score Is Null;
+
+-- Q4: Replace missing PerformanceScore with the department’s average.
+
+UPDATE employee_data e
+JOIN (
+    SELECT Department, AVG(Performance_Score) AS avg_score
+    FROM employee_data
+    WHERE Performance_Score IS NOT NULL
+    GROUP BY Department
+) t ON e.Department = t.Department
+SET e.Performance_Score = t.avg_score
+WHERE e.Performance_Score IS NULL;
+
+-- Q-5 Find the average salary by department.
+select department, avg(Monthly_Salary) as avg_salary
+from employee_data 
+group by department;
+
+-- Q-6 Show departments with an average salary greater than 80,000.
+select department, avg(monthly_salary) as avg_salary
+from employee_data
+group by department
+having avg_salary > 80000;
+
+-- Q7: Find employees earning more than the average salary of their department.
+select department, employee_id, monthly_salary from employee_data e
+where monthly_salary >
+(select avg(monthly_salary) from employee_data
+where department = e.department);
+
+-- Q8: Rank employees by salary within each department.
+select department, employee_id, monthly_salary,
+rank()over(partition by department order by monthly_salary desc) as salaryrank
+from employee_data;
+
+-- Q9: Retrieve the top 3 highest-paid employees from each department.
+select * from
+(select department, monthly_salary, 
+row_number() over(partition by department order by monthly_salary desc) as rownum
+from employee_data) t
+where rownum<=3;
+
+-- Q10: Create a stored procedure to get employee details by department.
+-- CREATE DEFINER=`root`@`localhost` PROCEDURE `getemployeebydpt`(in dept_name varchar(50))
+-- BEGIN
+-- select employee_id, monthly_salary,performance_score
+-- from employee_data
+-- where department=dept_name;
+-- END
+call getemployeebydpt('HR');
+
+-- Q11 Create a View (Quick Department Summary).
+create view dept_performance_summery as
+select department, avg(performance_score) as avg_performance
+from employee_data
+group by department;
+
+select * from dept_performance_summery;
+
+-- Q12 Handle Missing Scores with CTE(common table expression)
+with dpt_avg as(
+select department, avg(performance_score) as avg_score
+from employee_data
+where performance_score is not null
+group by department)
+select e.employee_id, e.department,e.performance_score,d.avg_score
+from employee_data e
+join dpt_avg d on e.department=d.department
+where e.performance_score is null;
+
+-- Q 13 Calculate Annual Bonus Based on Performance
+-- CREATE DEFINER=`root`@`localhost` FUNCTION `Calculatedbonus`(monthly_salary decimal(10,2),performance_score decimal(5,2)) RETURNS decimal(10,2)
+-- DETERMINISTIC
+-- BEGIN
+-- declare bonus decimal(10,2);
+		
+-- If performance_score>= 5 then
+-- 			set bonus=monthly_salary*0.20;
+-- 		elseif performance_score >= 3 then
+-- 			set bonus= monthly_salary*0.10;
+-- 		else 
+-- 			set bonus= monthly_salary*0.05;
+-- 		end if;
+-- 	RETURN bonus;
+-- 	END
+
+select employee_id,performance_score,calculatedbonus(monthly_salary,performance_score) as annual_bonus
+from employee_data;
